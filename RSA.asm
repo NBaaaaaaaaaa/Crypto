@@ -1,65 +1,139 @@
 global _start
 
-;что необходимо сделать:
-;- решето Эратосфена
-;- генерирование чисел
-;- проверка на простоту МРабина
-;- алг Евклида
-;- расшир алг Евклида
-
-section .rodata
-topBorder_Eratos dq 100      ;Верхняя граница диапазона поиска простых чисел
-
 section .data
-p_RSA dq 3                   ;генерируется простое число
-q_RSA dq 5                   ;генерируется простое число p != q
-
+;p_RSA != q_RSA
+p_RSA dq 91                     ;пока решил не генерить значения самостоят
+q_RSA dq 119                    ;пока решил не генерить значения самостоятельно
 
 section .bss
-slieve_Eratos times topBorder_Eratos - 1 dq 1;массив хранения решета Эратосфена
-
 ;e_RSA, n_RSA - открытый ключ, a_RSA, d_RSA - секретный ключ.
-n_RSA resq 2                 ;n_RSA = p_RSA * q_RSA
-f_iRSA resq 2                ;значение функции Эйлера fi(n) = (p_RSA-1) * (q_RSA-1)
-e_RSA resq 1                 ;генерируется 1 <= e_RSA <= fi, gcd(e_RSA, fi_RSA) = 1; алг. Евклида
-d_RSA resq 1                 ;d_RSA = e_RSA^-1 mod fi_RSA; расшир. алг. Евклида
+n_RSA resq 2                    ;n_RSA = p_RSA * q_RSA
+fi_RSA resq 2                   ;значение функции Эйлера fi(n) = (p_RSA-1) * (q_RSA-1)
+e_RSA resq 1                    ;генерируется 1 <= e_RSA <= fi_RSA, gcd(e_RSA, fi_RSA) = 1; алг. Евклида
+d_RSA resq 1                    ;d_RSA = e_RSA^-1 mod fi_RSA; расшир. алг. Евклида
+sec resq 1
 
 
 section .text
-_start:
-%macro Eratos 0
 
-    mov rcx, 2          ;начальное значение решета
-    mov rsi, 0          ;флаг 0 - ОК, 1 - переход к следующему значению, 2 - решето готово
-    mov rdx, 0          ;смещение по массиву slieve_Eratos
+%macro EuclAlg 2
 
-    push rsi            ;[rsp + 16]
-    push rcx            ;[rsp + 8]
+	mov rax, %1
+	mov rdi, %2
 
-%%while:                необходимо сделать вложенный цикл счетчики в стек
-    sub rcx, 2
-    mov rdi, [slieve_Eratos + rcx]
+%%all_zero:
+	cmp rax, 0
+	jnz %%comparison
+	cmp rdi, 0
+	jz exit
 
-    cmp rdi, 1
-    jnz %%nextIter
+%%comparison:
+	cmp rax, rdi
+	jae %%algorithm
+	mov rax, %2
+	mov rdi, %1
 
-    mov rsi, [rsp + 8]
-    mov [slieve_Eratos + rcx], rsi
+%%algorithm:
+	div rdi
+	cmp rdx, 0
+	jz %%exit_EuclAlg
 
+	mov rax, rdi
+	mov rdi, rdx
+	xor rdx, rdx
+	jmp %%algorithm
 
-%%nextIter:
-    inc rcx
-    jmp %%while
+%%exit_EuclAlg:
 
 %endmacro
+
+%macro EctendEuclAlg 2
+;расширенный алг эвклида. нахождение обр элемента. найдена закономерность. если ход нечетный, то отрицательное значение. если ход четный, то положительное значение. первые два хода идет заполнение коэффициентов rbx, rsi. при последущих идет rbx + rsi*rax (rax - целое число после деления) и знак зависит от четности хода.
+
+    mov rax, %2
+    mov rdi, %1
+    mov rcx, 0                      ;счетчик итераций
+    xor rbx, rbx                    ;хранится коэфициент предпредыдущий
+    xor rsi, rsi                    ;хранится коэфициент предыдущий
+
+%%algorithm:
+    inc rcx
+
+    div rdi
+
+    push rdx                        ;сохраняем остаток, т.к. после умножения регистр изменит значение
+
+    cmp rdx, 0                      ;проверка конец алгоритма Евклида
+    jz %%exit_algorithm             ;выход из алгоритма
+
+    cmp rcx, 1                      ;проверка на первую итерацию
+    jnz %%not_one                   ;переход если не первая
+
+    mov rbx, rax                    ;если первая, то сохраняем коэфициент
+    jmp %%next_iter
+
+%%not_one:
+
+    cmp rcx, 2                      ;проверка на вторую итерацию
+    jnz %%not_two                   ;переход если не вторая
+
+    mul rbx                         ;если вторая, высчитываем второй коэфициент
+    inc rax
+    mov rsi, rax                    ;сохраняем второй коэфициент
+
+    jmp %%next_iter
+
+%%not_two:
+
+    mul rsi                         ;высчитываем другой коэфициент
+    add rax, rbx
+
+    mov rbx, rsi                    ;сохраняем предпоследний коэфициент
+    mov rsi, rax                    ;сохраняем последний коэфициент
+
+%%next_iter:
+
+    pop rdx                         ;достаем остаток от деления
+    mov rax, rdi
+	mov rdi, rdx
+	xor rdx, rdx
+	jmp %%algorithm
+
+%%exit_algorithm:
+
+    pop rdx                         ;удаляем из стека значение
+
+    cmp rcx, 2                      ;проверка на количество итераций
+    jnz %%n
+
+    mov rax, [fi_RSA + 8]           ;если количество итераций равно 2
+    sub rax, rbx
+    mov rsi, rax
+    jmp %%end
+
+%%n:
+    test rcx, 1                     ;проверка на четность счетчика
+    jnz %%end                       ;переход если нечетное
+
+    mov rax, [fi_RSA + 8]
+    sub rax, rsi                    ;если чет, то обр элемент с - будет. тогда приводим под +. пока сделано, что можно вывести обр элемент в + единственным сложением. пример: обр = -10, модуль = 15, обр = 5
+    mov rsi, rax
+
+%%end:
+    mov [d_RSA], rsi
+
+%endmacro
+
+
+_start:
 ;формирование пар открытых/закрытых ключей для КС РША
 ;блок с известными p_RSA, q_RSA
 ;вычисление n_RSA = p_RSA * q_RSA
     mov rax, [p_RSA]
     mov rdx, [q_RSA]
-    mul rdx                 ;старшая часть в rdx, младшая часть в rax
+    mul rdx                         ;старшая часть в rdx, младшая часть в rax
     mov [n_RSA], rdx
-    mov [n_RSA + 8], rax     ;!!!пока будет считаться, что rdx = 0 всегда!!!
+    mov [n_RSA + 8], rax            ;!!!пока будет считаться, что rdx = 0 всегда!!!
 
 ;вычисление значения функции Эйлера fi(n) = (p_RSA-1) * (q_RSA-1)
     mov rax, [p_RSA]
@@ -68,7 +142,26 @@ _start:
     dec rdx
     mul rdx
     mov [fi_RSA], rdx
-    mov [fi_RSA + 8], rax    ;!!!пока будет считаться, что rdx = 0 всегда!!!
+    mov [fi_RSA + 8], rax           ;!!!пока будет считаться, что rdx = 0 всегда!!!
+
+;генерация 1 <= e_RSA <= fi_RSA, gcd(e_RSA, fi_RSA) = 1
+;пока генерация ужасна. необходимо будет позже менять
+    mov rcx, [fi_RSA + 8]
+gen_e_RSA:
+    dec rcx
+
+    cmp rcx, 1                      ;ситуация, когда ничего не подошло
+    jz exit
+
+    EuclAlg [fi_RSA + 8], rcx
+
+    cmp rdi, 1
+    jnz gen_e_RSA
+
+    mov [e_RSA], rcx                ;сохранение значения e_RSA
+
+    EctendEuclAlg [e_RSA], [fi_RSA + 8]
+    mov rdi, [d_RSA]
 
 exit:
     mov rax, 60
