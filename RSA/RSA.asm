@@ -1,5 +1,7 @@
 global _start
 
+extern writeConsole
+
 section .data
 ;p_RSA != q_RSA
 p_RSA dq 91                     ;пока решил не генерить значения самостоят
@@ -11,7 +13,7 @@ n_RSA resq 2                    ;n_RSA = p_RSA * q_RSA
 fi_RSA resq 2                   ;значение функции Эйлера fi(n) = (p_RSA-1) * (q_RSA-1)
 e_RSA resq 1                    ;генерируется 1 <= e_RSA <= fi_RSA, gcd(e_RSA, fi_RSA) = 1; алг. Евклида
 d_RSA resq 1                    ;d_RSA = e_RSA^-1 mod fi_RSA; расшир. алг. Евклида
-sec resq 1
+buffer resb 50
 
 
 section .text
